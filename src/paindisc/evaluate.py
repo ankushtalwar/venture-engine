@@ -15,8 +15,7 @@ from .models import Status
 
 def evaluate(store, gold_path: Path) -> dict:
     gold = [json.loads(line) for line in gold_path.read_text().splitlines() if line.strip()]
-    by_url = {r["url"]: r["id"] for r in store.db.execute(
-        "SELECT id, json_extract(data, '$.url') AS url FROM documents")}
+    by_url = store.document_urls()
     predictions = store.triage_results()
 
     tp = fp = fn = tn = missing = 0

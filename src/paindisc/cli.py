@@ -23,6 +23,8 @@ SourceOpt = typer.Option(DEFAULT_SOURCES, "--source", "-s",
 
 def _pipeline(db: Optional[Path] = None, mock: bool = False) -> Pipeline:
     settings = load_settings(db_path=db)
+    if db is not None:  # an explicit SQLite file wins over DATABASE_URL
+        settings.database_url = None
     if mock:
         settings.llm_mock = True
     if settings.llm_mock:
@@ -102,18 +104,32 @@ def run(source: list[str] = SourceOpt, budget: int = 20, limit: int = 50, top: i
 
 
 @app.command()
-def deepdive(top: int = 10, source: list[str] = SourceOpt):
+def deepdive(top: int = 10, source: list[str] = SourceOpt,
+             agentic: bool = typer.Option(False, help="tool-using Claude loop (logs every query); mock offline"),
+             max_queries: int = typer.Option(4, help="agentic: searches per cluster"),
+             max_total: int = typer.Option(30, help="agentic: searches per run, all clusters")):
     """Corroborate (or contradict) the top clusters with targeted searches, then re-analyse."""
-    _pipeline().deepdive(top=top, sources=tuple(source))
+    if agentic:
+        _pipeline().deepdive_agentic(top=top, sources=tuple(source), max_queries=max_queries,
+                                     max_total=max_total)
+    else:
+        _pipeline().deepdive(top=top, sources=tuple(source))
 
 
 @app.command()
 def demo(fixture: Path = typer.Option(Path("tests/fixtures/demo_docs.jsonl"), help="synthetic JSONL documents"),
-         db: Path = typer.Option(Path("data/demo.sqlite"))):
+         db: Path = typer.Option(Path("data/demo.sqlite")),
+         database_url: Optional[str] = typer.Option(None, help="seed this Postgres database instead (wipes it)")):
     """Run the whole pipeline offline on synthetic fixtures (mock LLM). Writes reports/demo-pain-report.*"""
-    if db.exists():
-        db.unlink()
-    p = _pipeline(db=db, mock=True)
+    if database_url:
+        settings = load_settings()
+        settings.llm_mock, settings.database_url = True, database_url
+        p = Pipeline(settings)
+        p.store.reset()
+    else:
+        if db.exists():
+            db.unlink()
+        p = _pipeline(db=db, mock=True)
     new, dupes = p.load_fixture(fixture)
     typer.echo(f"loaded {new} synthetic documents ({dupes} duplicates)")
     p.triage()
@@ -197,6 +213,65 @@ def boards_discover(role: str, ats: str = typer.Option("both", help="greenhouse,
         tokens = sorted({m.group(1) for r in brave.search(query) for m in [re.search(pattern, r.get("url", ""))] if m}
                         - {"embed", "jobs"})
         typer.echo(f"{name}: {', '.join(tokens) or 'none found'}")
+
+
+@app.command()
+def serve(host: Optional[str] = typer.Option(None, help="default PAINDISC_API_HOST or 127.0.0.1"),
+          port: Optional[int] = typer.Option(None, help="default PAINDISC_API_PORT or 8000"),
+          db: Optional[Path] = typer.Option(None, help="SQLite file (overrides DATABASE_URL)"),
+          reload: bool = typer.Option(False, help="auto-reload on code changes (development)")):
+    """Serve the review UI and its JSON API."""
+    from .api.app import run as run_api
+    settings = load_settings(db_path=db)
+    if db is not None:
+        settings.database_url = None
+    run_api(settings, host or settings.api_host, port or settings.api_port, reload=reload)
+
+
+@app.command()
+def trends(as_json: bool = typer.Option(False, "--json", help="print the raw JSON")):
+    """New, rising, falling and gone problems since the last comparable run."""
+    from .trends import compute_trends
+    p = _pipeline()
+    result = compute_trends(p.store, p.settings.load_yaml("scoring.yaml").get("trends", {}))
+    if as_json:
+        typer.echo(json.dumps(result, indent=2, default=str))
+        return
+    from .trends import format_trends
+    typer.echo(format_trends(result))
+
+
+@app.command()
+def deliver(report: Optional[Path] = typer.Option(None, help="report file to cite (default: newest pain report)"),
+            top: int = typer.Option(10, help="cards in the message"),
+            db: Optional[Path] = typer.Option(None, help="SQLite file (overrides DATABASE_URL)")):
+    """Post the top pain cards and trend alerts to Slack. Needs SLACK_WEBHOOK_URL and registry source `slack`
+    allowed; otherwise a no-op (exit 0). Exits 1 only when a post fails."""
+    from .deliver import deliver as deliver_digest
+    from .pipeline import _open_store
+    settings = load_settings(db_path=db)
+    if db is not None:
+        settings.database_url = None
+    result = deliver_digest(settings, _open_store(settings), report_path=report, top=top)
+    typer.echo(result["summary"])
+    if result["status"] == "failed":
+        raise typer.Exit(1)
+
+
+db_app = typer.Typer(help="Database maintenance.", no_args_is_help=True)
+app.add_typer(db_app, name="db")
+
+
+@db_app.command("migrate")
+def db_migrate(database_url: Optional[str] = typer.Option(None, help="default DATABASE_URL")):
+    """Apply Postgres migrations (SQLite needs none)."""
+    from .storage import migrate
+    url = database_url or load_settings().database_url
+    if not url:
+        typer.secho("DATABASE_URL is not set; SQLite creates its schema on open.", fg=typer.colors.YELLOW)
+        raise typer.Exit(0)
+    applied = migrate(url)
+    typer.echo(f"applied: {', '.join(applied)}" if applied else "schema up to date")
 
 
 @app.command()

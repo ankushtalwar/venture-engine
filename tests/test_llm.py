@@ -70,3 +70,23 @@ def test_batch_call_parses_successes_and_reports_errors(settings):
     assert isinstance(results["doc2"], Exception)
     params = SENT[0]["requests"][0]["params"]
     assert params["output_config"]["format"]["type"] == "json_schema"
+
+
+def test_chat_turn_sends_tools_and_caching_and_can_skip_fallbacks(settings):
+    SENT.clear()
+    llm = make_llm(settings)
+    tools = [{"name": "finish", "description": "d", "strict": True, "input_schema": {
+        "type": "object", "properties": {"notes": {"type": "string"}}, "required": ["notes"],
+        "additionalProperties": False}}]
+    resp = llm.chat(model="claude-sonnet-5-5", system="sys", messages=[{"role": "user", "content": "hi"}],
+                    tools=tools, effort="medium", fallbacks=False)
+    assert resp.stop_reason == "end_turn"
+    body = SENT[0]
+    assert body["tools"] == tools and body["cache_control"] == {"type": "ephemeral"}
+    assert body["output_config"] == {"effort": "medium"} and "fallbacks" not in body and "tool_choice" not in body
+
+    llm.chat(model="claude-sonnet-5-5", system="sys", messages=[{"role": "user", "content": "hi"}], tools=tools)
+    assert SENT[1]["fallbacks"] == "default"
+
+    llm.close()  # a client passed in belongs to the caller and stays open
+    assert not llm._client.is_closed()

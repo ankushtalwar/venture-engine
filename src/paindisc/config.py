@@ -24,6 +24,13 @@ class Settings:
     model_extract: str
     model_synth: str
     user_agent: str
+    # Platform (review UI, Postgres, delivery). Defaults keep the offline SQLite behaviour.
+    database_url: str | None = None      # postgresql://... selects PostgresStore; unset = SQLite at db_path
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+    api_token: str | None = None         # if set, write endpoints require "Authorization: Bearer <token>"
+    frontend_dist: Path | None = None    # built SPA served at / (default: <home>/frontend/dist)
+    slack_webhook_url: str | None = None # report/trend delivery; also needs registry source `slack` allowed
 
     def load_yaml(self, name: str) -> dict:
         path = self.config_dir / name
@@ -60,4 +67,11 @@ def load_settings(home: Path | str | None = None, db_path: Path | str | None = N
         user_agent=os.environ.get(
             "PAINDISC_USER_AGENT", "paindisc/0.1 (research crawler; set PAINDISC_USER_AGENT with a contact)"
         ),
+        database_url=os.environ.get("DATABASE_URL") or None,
+        api_host=os.environ.get("PAINDISC_API_HOST", "127.0.0.1"),
+        api_port=int(os.environ.get("PAINDISC_API_PORT", "8000")),
+        api_token=os.environ.get("PAINDISC_API_TOKEN") or None,
+        frontend_dist=Path(os.environ["PAINDISC_FRONTEND_DIST"]) if os.environ.get("PAINDISC_FRONTEND_DIST")
+        else home / "frontend" / "dist",
+        slack_webhook_url=os.environ.get("SLACK_WEBHOOK_URL") or None,
     )

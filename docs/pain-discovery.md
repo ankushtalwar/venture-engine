@@ -10,10 +10,24 @@ The full contract is in [SPEC.md](../SPEC.md). Commands below run from the repo 
 uv sync
 uv run paindisc demo          # synthetic fixtures, mock LLM
 open reports/demo-pain-report.html
-uv run pytest                 # 32 tests, offline
+uv run pytest                 # offline; Postgres tests run when PAINDISC_TEST_DATABASE_URL is set
 ```
 
 A copy of the demo output is in [sample-demo-report.md](sample-demo-report.md).
+
+## Review UI
+
+```bash
+uv run paindisc demo --db data/demo.sqlite
+(cd frontend && npm ci && npm run build)
+uv run paindisc serve --db data/demo.sqlite      # http://127.0.0.1:8000
+```
+
+Accept or reject pain cards, label signals valid / invalid / duplicate, merge or split clusters, re-synthesise a card, and see trends, sources, coverage and reports. Merges and splits are stored as overrides, so the next `paindisc cluster` keeps them; labels follow a cluster when its membership changes. Set `PAINDISC_API_TOKEN` to require a bearer token for writes. API reference: [api.md](api.md). For development, `scripts/dev.sh --demo` runs the API with reload plus the Vite dev server.
+
+## Docker
+
+`docker compose up -d --build` starts Postgres + pgvector, applies migrations, serves the UI on 127.0.0.1:8000 and schedules `scripts/weekly.sh` (Mondays 06:00 by default). Environment variables, Slack delivery, backups and security notes are in [deployment.md](deployment.md).
 
 ## Real runs
 
@@ -35,7 +49,13 @@ uv run paindisc label                                      # accept / reject car
 uv run paindisc stats                                      # coverage and which queries pay off
 ```
 
-Reports land in `reports/pain-report-YYYY-MM-DD.{md,html}`. `scripts/weekly.sh` is a cron-ready weekly run.
+```bash
+uv run paindisc deepdive --agentic --top 5   # Claude picks searches on allowed sources; every query is logged
+uv run paindisc trends                        # new / rising / falling / gone since the last comparable run
+uv run paindisc deliver                       # Slack digest; a no-op until SLACK_WEBHOOK_URL is set and `slack` is allowed
+```
+
+Reports land in `reports/pain-report-YYYY-MM-DD.{md,html}`. `scripts/weekly.sh` is the weekly run (run, deep dive, trends, report, deliver). Set `DATABASE_URL=postgresql://...` to use Postgres instead of SQLite (`paindisc db migrate` applies the schema).
 
 ## How it works
 
@@ -72,6 +92,10 @@ Defaults: `claude-haiku-5-5` (triage, prices), `claude-sonnet-5-5` (extraction, 
 ```
 config/      registry, phrases, segments, job boards, pricing targets, scoring
 prompts/     triage, extract, jobs, prices, merge, synthesize, skeptic
-src/paindisc collectors/, planner, dedupe, verify, llm, mock, cluster, score, synth, report, pipeline, cli
+src/paindisc collectors/, planner, dedupe, verify, llm, mock, cluster, score, synth, report, pipeline, cli,
+             store (SQLite), pgstore + migrations/ (Postgres), storage, trends, deliver, agent/ (deep dive), api/
+frontend/    review UI (React + Vite + TypeScript)
+e2e/         Playwright end-to-end tests
+scripts/     weekly run, scheduler, dev, e2e, test-all, docker smoke
 tests/       offline tests + synthetic fixtures + gold set
 ```

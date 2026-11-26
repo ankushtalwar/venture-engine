@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import html
+import re
 from collections import Counter
+from urllib.parse import quote, urlparse
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import Cluster, Document, PainSignal, PriceExtraction, Status
 from .score import freq_bucket
+from .store import cluster_title
 
 Members = list[tuple[PainSignal, Document]]
 
@@ -122,7 +125,7 @@ def card(cluster: Cluster, members: Members, latest: dict) -> dict:
     members = sorted(members, key=lambda m: (m[0].specificity, -m[0].intensity))
     return {
         "id": cluster.id,
-        "title": cluster.synthesis.title if cluster.synthesis else _clean(cluster.canonical, 90),
+        "title": cluster_title(cluster),  # same title as trend rows and the API
         "summary": cluster.synthesis.summary if cluster.synthesis else "",
         "hypotheses": cluster.synthesis.hypotheses if cluster.synthesis else [],
         "skeptic": [p.model_dump() for p in cluster.skeptic.points] if cluster.skeptic else [],
@@ -175,12 +178,31 @@ def build_context(store, top: int = 20, job_tasks: list[dict] | None = None, dem
 # ------------------------------------------------------------------ markdown
 
 
-def _md(text: str) -> str:
-    return (text or "").replace("|", "\\|").replace("\n", " ")
+def safe_url(url: str | None) -> str | None:
+    """Only absolute http(s) URLs become links; anything else (javascript:, data:, relative) is shown as text."""
+    url = (url or "").strip()
+    try:
+        parts = urlparse(url)
+    except ValueError:
+        return None
+    return url if parts.scheme.lower() in ("http", "https") and parts.netloc else None
+
+
+_MD_SPECIAL = re.compile(r"([\\\[\]<>|])")  # enough for no links/images ([ ]), HTML/autolinks (< >), table breaks (|)
+
+
+def _md(text) -> str:
+    """Source and model text as inert Markdown: no links, images, HTML or table breaks; otherwise readable raw."""
+    return _MD_SPECIAL.sub(r"\\\1", " ".join(str(text or "").split()))
+
+
+def _md_url(url: str) -> str:
+    return quote(url, safe=":/?#@!$&'*+,;=%~-._[]")  # encodes spaces, parentheses, <, > and |
 
 
 def _md_ref(item: dict) -> str:
-    return f"[{item['label']}]({item['url']})" if item.get("url") else item.get("label", "")
+    url = safe_url(item.get("url"))
+    return f"[{_md(item.get('label', ''))}]({_md_url(url)})" if url else _md(item.get("label", ""))
 
 
 def render_markdown(ctx: dict) -> str:
@@ -195,9 +217,9 @@ def render_markdown(ctx: dict) -> str:
                 f"**Confidence:** {c['confidence']} · **Score:** {c['score']:.2f} · {c['n_signals']} signals · "
                 f"{c['n_authors']} distinct authors · {', '.join(c['source_types'])} · {c['span']}", ""]
         if c["summary"]:
-            out += [c["summary"], ""]
+            out += [_md(c["summary"]), ""]
         financial = "; ".join(
-            f"{f['value']} ({f['status']}) — \"{_md(f['quote'])}\" {_md_ref(f)}"
+            f"{_md(f['value'])} ({f['status']}) — \"{_md(f['quote'])}\" {_md_ref(f)}"
             + (f" — basis: {_md(f['basis'])}" if f["basis"] else "")
             for f in c["financial"]
         ) or "Not documented in sources"
@@ -214,10 +236,10 @@ def render_markdown(ctx: dict) -> str:
                 out += [f"**{heading}**", ""] + [f"- \"{_md(q['quote'])}\" — {_md_ref(q)}" for q in c[key]] + [""]
         if c["spend"]:
             out += ["**Spend evidence**", ""]
-            out += [f"- {s['type']}{' · ' + s['amount'] if s['amount'] else ''} — \"{_md(s['quote'])}\" — {_md_ref(s)}"
+            out += [f"- {_md(s['type'])}{' · ' + _md(s['amount']) if s['amount'] else ''} — \"{_md(s['quote'])}\" — {_md_ref(s)}"
                     for s in c["spend"]] + [""]
         if c["pricing"]:
-            out += ["**Pricing on record**", ""] + [f"- {p['vendor']}: {p['tiers']} — {_md_ref(p)}"
+            out += ["**Pricing on record**", ""] + [f"- {_md(p['vendor'])}: {_md(p['tiers'])} — {_md_ref(p)}"
                                                      for p in c["pricing"]] + [""]
         comps = " · ".join(f"{k} {v:.2f}" for k, v in c["components"].items())
         out += [f"**Score components:** {comps}", ""]
@@ -240,7 +262,7 @@ def render_markdown(ctx: dict) -> str:
 
     if ctx["prices"]:
         out += ["## Pricing history", "", "| Vendor | Date | Tiers | Changed |", "|---|---|---|---|"]
-        out += [f"| {_md(p['vendor'])} | [{p['date']}]({p['url']}) | {_md(p['tiers'])} | {'yes' if p['changed'] else ''} |"
+        out += [f"| {_md(p['vendor'])} | {_md_ref({'url': p['url'], 'label': p['date']})} | {_md(p['tiers'])} | {'yes' if p['changed'] else ''} |"
                 for p in ctx["prices"]] + [""]
 
     out += ["## Coverage and verification", "", "| Source | Docs | Duplicates | Triaged | Pain | Signals | Dropped |",
@@ -274,7 +296,9 @@ def _e(text) -> str:
 
 
 def _href(item: dict) -> str:
-    return f'<a href="{_e(item["url"])}">{_e(item["label"])}</a>' if item.get("url") else _e(item.get("label", ""))
+    url = safe_url(item.get("url"))
+    label = _e(item.get("label", ""))
+    return f'<a href="{_e(url)}" rel="noopener noreferrer">{label}</a>' if url else label
 
 
 def _quote_list(items: list[dict]) -> str:
@@ -340,7 +364,7 @@ def render_html(ctx: dict) -> str:
     if ctx["prices"]:
         parts.append("<section class='card'><h2>Pricing history</h2><table><tr><th>Vendor</th><th>Date</th>"
                      "<th>Tiers</th><th>Changed</th></tr>" + "".join(
-                         f"<tr><td>{_e(p['vendor'])}</td><td><a href='{_e(p['url'])}'>{_e(p['date'])}</a></td>"
+                         f"<tr><td>{_e(p['vendor'])}</td><td>{_href({'url': p['url'], 'label': p['date']})}</td>"
                          f"<td>{_e(p['tiers'])}</td><td>{'yes' if p['changed'] else ''}</td></tr>"
                          for p in ctx["prices"]) + "</table></section>")
 

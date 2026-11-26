@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from . import mock
+from .llm import LLMError
 from .models import Cluster, Document, PainSignal, SkepticReview, Status, Synthesis
 
 
@@ -33,6 +36,51 @@ def evidence_pack(cluster: Cluster, members: list[tuple[PainSignal, Document]], 
     return "\n".join(lines)
 
 
+def ground_skeptic(cluster: Cluster, review: SkepticReview) -> SkepticReview:
+    """Keep only citations to signals in this cluster; an evidence point left with none becomes a hypothesis."""
+    valid = set(cluster.signal_ids)
+    for point in review.points:
+        point.signal_ids = [s for s in point.signal_ids if s in valid]
+        if point.kind == "evidence" and not point.signal_ids:
+            point.kind = "hypothesis"
+    return review
+
+
+def synthesize_cluster(store, llm, settings, cluster_id: str) -> Cluster:
+    """Synthesis + skeptic pass for one cluster, saved with `store.save_cluster`. Works in mock mode.
+
+    Raises KeyError if the cluster doesn't exist, and LLMError if either model call fails (nothing is saved then).
+    """
+    cluster = store.get_cluster(cluster_id)
+    if cluster is None:
+        raise KeyError(cluster_id)
+    pairs = {s.id: (s, d) for s, d in store.signals_with_docs(list(cluster.signal_ids))}
+    members = [pairs[i] for i in cluster.signal_ids if i in pairs]
+    if llm.mock:
+        cluster.synthesis = mock.synthesize(cluster.canonical, cluster.n_signals, cluster.n_authors,
+                                            cluster.source_types)
+        cluster.skeptic = mock.skeptic(cluster.n_authors, cluster.source_types, cluster.signal_ids)
+        store.save_cluster(cluster)
+        return cluster
+
+    pack = evidence_pack(cluster, members)
+    with ThreadPoolExecutor(max_workers=2) as pool:  # the two calls are independent
+        synth = pool.submit(llm.structured, model=settings.model_synth, system=settings.prompt("synthesize"),
+                            user=pack, output_type=Synthesis, max_tokens=1500)
+        review = pool.submit(llm.structured, model=settings.model_synth, system=settings.prompt("skeptic"),
+                             user=pack, output_type=SkepticReview, max_tokens=1500)
+        try:
+            synthesis, skeptic = synth.result(), review.result()
+        except LLMError:
+            raise
+        except Exception as exc:  # API errors: one exception type for callers
+            raise LLMError(f"synthesis failed for cluster {cluster_id}: {exc}") from exc
+    cluster.synthesis = synthesis
+    cluster.skeptic = ground_skeptic(cluster, skeptic)
+    store.save_cluster(cluster)
+    return cluster
+
+
 def run_synthesis(store, llm, settings, top: int = 20, batch: bool = False) -> int:
     clusters = store.clusters()[:top]
     if not clusters:
@@ -60,11 +108,6 @@ def run_synthesis(store, llm, settings, top: int = 20, batch: bool = False) -> i
             c.synthesis = synth[cid]
         review = skeptic.get(cid)
         if isinstance(review, SkepticReview):
-            valid = set(c.signal_ids)
-            for point in review.points:  # keep only citations to signals in this cluster
-                point.signal_ids = [s for s in point.signal_ids if s in valid]
-                if point.kind == "evidence" and not point.signal_ids:
-                    point.kind = "hypothesis"
-            c.skeptic = review
+            c.skeptic = ground_skeptic(c, review)
         store.save_cluster(c)
     return len(packs)

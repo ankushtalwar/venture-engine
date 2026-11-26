@@ -1,6 +1,6 @@
 # Venture Engine: notes for Claude Code sessions and agent teams
 
-The README describes the full seven-agent plan. What's implemented so far is the Pain Discovery Agent: package `paindisc` in `src/paindisc/`, documented in `docs/pain-discovery.md`.
+The README describes the full seven-agent plan. What's implemented so far is the Pain Discovery Agent: package `paindisc` in `src/paindisc/`, documented in `docs/pain-discovery.md`, with a review UI (`frontend/`, FastAPI in `src/paindisc/api/`), a Postgres backend, Playwright tests (`e2e/`) and Docker deployment (`docs/deployment.md`).
 
 Read SPEC.md first. It is the contract: if code and spec disagree, fix one of them in the same change.
 
@@ -10,6 +10,9 @@ Read SPEC.md first. It is the contract: if code and spec disagree, fix one of th
 - `uv run pytest -q`: offline test suite (no keys, no network). It must pass before any task is marked complete.
 - `uv run paindisc demo`: the whole pipeline on synthetic fixtures with the mock LLM
 - `uv run paindisc --help`: the CLI
+- `uv run paindisc serve --db data/demo.sqlite`: API + built UI on 127.0.0.1:8000
+- `scripts/test-all.sh`: pytest, frontend tests/typecheck/build, then Playwright (`SKIP_E2E=1` to skip)
+- `scripts/docker-smoke.sh`: build the image, bring up compose with Postgres, seed the demo, check the API, tear down
 
 ## Non-negotiables
 
@@ -23,7 +26,7 @@ Read SPEC.md first. It is the contract: if code and spec disagree, fix one of th
 
 ## File ownership (agent teams)
 
-One owner per file. These shared files belong to the team lead: `src/paindisc/{pipeline,cli,models,store,report}.py`, `src/paindisc/collectors/__init__.py`, `config/*.yaml`, `prompts/*`, `SPEC.md`, `README.md`.
+One owner per file. These shared files belong to the team lead: `src/paindisc/{pipeline,cli,models,store,report,config}.py`, `src/paindisc/collectors/__init__.py`, `config/*.yaml`, `prompts/*`, `SPEC.md`, `README.md`, `pyproject.toml`, `uv.lock`. `frontend/` and `e2e/` have their own package.json and lockfile.
 
 Teammates create new files and message the lead with the exact change they need in a shared file. If a test fails in another teammate's files, message that teammate or the lead; don't edit their files.
 

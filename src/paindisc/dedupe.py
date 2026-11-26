@@ -10,6 +10,7 @@ from datasketch import MinHash, MinHashLSH
 from .models import Document
 
 NUM_PERM = 64
+SCHEME = "affine32"  # datasketch >= 2.0 default; stored blobs must be rebuilt with the same scheme
 
 
 def _shingles(text: str, k: int = 5) -> set[str]:
@@ -20,7 +21,7 @@ def _shingles(text: str, k: int = 5) -> set[str]:
 
 
 def minhash(text: str) -> MinHash:
-    m = MinHash(num_perm=NUM_PERM)
+    m = MinHash(num_perm=NUM_PERM, scheme=SCHEME)
     for shingle in _shingles(text):
         m.update(shingle.encode())
     return m
@@ -35,7 +36,7 @@ class NearDupIndex:
         for doc_id, blob in store.minhashes():
             if doc_id in self._keys:
                 continue
-            m = MinHash(num_perm=NUM_PERM, hashvalues=np.frombuffer(blob, dtype=np.uint64))
+            m = MinHash(num_perm=NUM_PERM, hashvalues=np.frombuffer(blob, dtype=np.uint64), scheme=SCHEME)
             self.lsh.insert(doc_id, m)
             self._keys.add(doc_id)
 

@@ -77,3 +77,70 @@ def test_fabricated_extraction_never_reaches_the_store(settings, monkeypatch):
     stats = p.extract()
     assert stats["signals"] == 0 and stats["dropped"] > 0
     assert p.store.signals_with_docs() == []
+
+
+def test_near_dup_index_reloads_stored_minhashes(settings):
+    """A non-empty store must reload into a fresh index (datasketch >= 2.0 needs the scheme) and catch near-dupes."""
+    from datetime import datetime, timezone
+
+    from paindisc.dedupe import NearDupIndex, ingest
+
+    p, new, _ = run_demo(settings)
+    assert new > 0 and p.store.minhashes()
+    index = NearDupIndex()
+    index.load(p.store)  # raised ValueError under datasketch 2.0 before the scheme was pinned
+    original = next(d for d in (p.store.get_document(i) for i, _ in p.store.minhashes()) if len(d.text.split()) > 30)
+    now = datetime.now(timezone.utc)
+    near = Document(id="near-dup", source="test", source_type="forum", route="fixture", external_id="near-dup",
+                    url="https://example.com/near", text=original.text + " Thanks.", published_at=now,
+                    captured_at=now)
+    added, dupes = ingest(p.store, index, [near])
+    assert (added, dupes) == (0, 1)
+    assert p.store.get_document("near-dup").duplicate_of == original.id
+
+
+def test_cluster_labels_follow_reformed_clusters(settings):
+    """A reviewer's accept survives a re-cluster that changes the cluster id (one signal removed)."""
+    p, _, _ = run_demo(settings)
+    target = next(c for c in p.store.clusters() if c.n_signals >= 3)
+    p.store.set_label("cluster", target.id, "accept", "keep")
+    p.store.add_override("split", {"signal_ids": [target.signal_ids[0]]})  # membership changes -> new id
+    p.cluster(threshold=0.75)
+    successor = [c for c in p.store.clusters() if set(c.signal_ids) == set(target.signal_ids[1:])]
+    assert successor and successor[0].id != target.id
+    assert p.store.labels("cluster") == {successor[0].id: "accept"}
+
+
+def test_labels_go_to_the_true_successor_not_the_nearest_labelled_one(settings):
+    """X continues unlabelled B (Jaccard .625); it only grazes labelled A (.3). A's label must not jump to X."""
+    from paindisc.models import Cluster
+
+    def c(cid, ids):
+        return Cluster(id=cid, canonical=cid, signal_ids=[f"s{i}" for i in ids], n_signals=len(ids), n_authors=1,
+                       source_types=["forum"])
+
+    p = make_pipeline(settings)
+    p.store.set_label("cluster", "A", "accept")
+    previous = {"A": c("A", range(1, 6)), "B": c("B", range(6, 11))}
+    new = [c("X", [1, 2, 3, 6, 7, 8, 9, 10]), c("Z", [4, 5, 11, 12, 13, 14])]
+    assert p._carry_labels(previous, new, threshold=0.3) == 0
+    assert p.store.labels("cluster") == {"A": "accept"}  # kept as history, not misattributed
+
+
+def test_report_links_are_http_only_and_source_text_is_inert():
+    """Report files are opened outside the app (disk, Slack digest): no javascript:/data: links, no Markdown links
+    or HTML smuggled in through quotes."""
+    from paindisc.report import _href, _md, _md_ref, safe_url
+
+    for bad in ("javascript:window.x=1", " JavaScript:alert(1)", "data:text/html,<b>x</b>", "/relative", "", None):
+        assert safe_url(bad) is None
+        assert "href" not in _href({"url": bad, "label": "src · 2026-10-05"})
+        assert "](" not in _md_ref({"url": bad, "label": "src · 2026-10-05"})
+    ok = "https://news.ycombinator.com/item?id=1"
+    assert _href({"url": ok, "label": "hn"}) == f'<a href="{ok.replace("&", "&amp;")}" rel="noopener noreferrer">hn</a>'
+    assert _md_ref({"url": "https://ex.com/a b)(<x>|", "label": "ex"}) == "[ex](https://ex.com/a%20b%29%28%3Cx%3E%7C)"
+    quote = "[click me](javascript:alert(1)) <img src=x onerror=alert(2)> | col"
+    escaped = _md(quote)
+    import re
+    assert re.search(r"(?<!\\)[\[\]<>|]", escaped) is None  # every Markdown/HTML special is backslash-escaped
+    assert escaped.replace("\\", "") == quote  # renders back to the verbatim quote
