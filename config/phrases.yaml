@@ -1,0 +1,47 @@
+# Trigger phrases, grouped into families. The planner combines them with each
+# segment's vocabulary (config/segments.yaml) into query "arms" and learns which pay off.
+
+families:
+  wish:
+    - I wish there was a tool
+    - does anyone know a tool for
+    - is there software that
+  manual:
+    - we still do this manually
+    - we use Excel to manage
+    - copy and paste between
+  time:
+    - I spend hours every week
+    - takes hours every month
+  money:
+    - costing us
+    - we lost money because
+  switching:
+    - looking for an alternative to
+    - too expensive for a small business
+  hiring:
+    - we hired someone to handle
+    - hired a VA to
+  compliance:
+    - audit nightmare
+    - compliance deadline
+  integration:
+    - doesn't integrate with
+    - no API for
+  better_way:
+    - there has to be a better way
+
+# How each query-driven source turns (phrase, term) into a query.
+sources:
+  hn:
+    templates: ["{phrase} {term}"]
+  brave:
+    templates: ['"{phrase}" "{term}"']
+  github:
+    use_phrases: false   # issue trackers don't talk like forums; search the job vocabulary instead
+    # {scope} comes from github_scope in config/segments.yaml. Unscoped searches mostly return
+    # developers' own project tickets; scoping to repos of business tools gives real user requests.
+    templates:
+      - '"{term}" label:enhancement {scope}'
+      - '"{term}" "feature request" {scope}'
+      - '"{term}" integration in:title {scope}'

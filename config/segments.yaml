@@ -1,0 +1,21 @@
+# Pilot segments. These three are EXAMPLES - replace them with 3 verticals where you
+# could later reach buyers for interviews. Vocabulary should be how operators talk.
+#
+# Optional github_scope narrows GitHub searches to repos whose users are businesses
+# (open-source ERPs, accounting, CRM, property tools), e.g.
+#   github_scope: "repo:frappe/erpnext repo:invoiceninja/invoiceninja"
+# Check that each repo exists and is active before adding it.
+
+segments:
+  accounting_firms:
+    label: Accounting and bookkeeping firms
+    naics: "541211"
+    vocab: [month-end close, bank reconciliation, client documents, accounts payable]
+  property_management:
+    label: Residential property managers
+    naics: "531311"
+    vocab: [rent roll, move-out inspection, work orders, tenant screening]
+  freight_brokerage:
+    label: Freight brokers and 3PLs
+    naics: "488510"
+    vocab: [rate confirmation, proof of delivery, carrier onboarding, detention]

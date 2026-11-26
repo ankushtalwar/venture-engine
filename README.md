@@ -350,6 +350,8 @@ Raw third-party platform data is not intended to be sold or redistributed.
 - [ ] Research dashboard
 - [ ] End-to-end validation
 
+Implemented so far: the Pain Discovery Agent (`paindisc`). See [docs/pain-discovery.md](docs/pain-discovery.md) to run it and [SPEC.md](SPEC.md) for its contract.
+
 ---
 
 ## 14. Disclaimer

@@ -221,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Venture Engine runtime output (local database, snapshots, generated reports)
+data/
+reports/
