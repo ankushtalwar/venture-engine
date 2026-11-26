@@ -6,15 +6,19 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.70",
-    "datasketch>=1.6",
+    "datasketch>=2.0",
+    "fastapi>=0.115",
     "httpx>=0.28",
     "numpy>=2.0",
+    "pgvector>=0.3",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.9",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
     "rapidfuzz>=3.9",
     "scikit-learn>=1.5",
     "typer>=0.12",
+    "uvicorn[standard]>=0.32",
 ]
 
 [project.optional-dependencies]

@@ -1,4 +1,9 @@
-"""Claude wrapper: structured outputs, parallel sync calls, and the Message Batches API."""
+"""Claude wrapper: structured outputs, tool-use turns, parallel sync calls, and the Message Batches API.
+
+Thread safety: an `LLM` keeps no per-call state; the Anthropic client it wraps is safe to share across threads
+(`map` already calls it from a thread pool). Create one per process (for example at API start-up), share it across
+requests, and `close()` it on shutdown. Creating one per request works but opens a new connection pool each time.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +17,10 @@ from .config import Settings
 
 T = TypeVar("T", bound=BaseModel)
 Results = dict[str, "BaseModel | Exception"]
+
+# Server-side refusal fallback: if the model declines for policy reasons, the API re-runs the request on the
+# model's default substitute inside the same call. On models without fallbacks the request runs unchanged.
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class LLMError(Exception):
@@ -37,9 +46,11 @@ class LLM:
         self.mock = settings.llm_mock and client is None
         self.log = log
         self._client = client
+        self._owns_client = False
         if not self.mock and self._client is None:
             import anthropic
             self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            self._owns_client = True
 
     def structured(self, *, model: str, system: str, user: str, output_type: type[T], max_tokens: int = 4096) -> T:
         resp = self._client.messages.parse(
@@ -53,6 +64,32 @@ class LLM:
         if parsed is None:
             raise LLMError(f"no parsed output (stop_reason={resp.stop_reason})")
         return parsed
+
+    def chat(self, *, model: str, system: str, messages: list, tools: list[dict], max_tokens: int = 16000,
+             effort: str | None = None, fallbacks: bool = True):
+        """One turn of a tool-use conversation; returns the Message.
+
+        Callers append `response.content` to `messages` unchanged (thinking blocks included) and never edit
+        earlier turns. tool_choice stays "auto": forced tool choice is rejected by current models.
+        """
+        params: dict = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "system": _system(system),
+            "messages": messages,
+            "tools": tools,
+            "cache_control": {"type": "ephemeral"},  # caches the growing conversation between turns
+        }
+        if effort:
+            params["output_config"] = {"effort": effort}
+        if fallbacks:
+            return self._client.beta.messages.create(**params, betas=[FALLBACK_BETA], fallbacks="default")
+        return self._client.messages.create(**params)
+
+    def close(self) -> None:
+        """Close the HTTP client this LLM created (a client passed in stays open)."""
+        if self._owns_client:
+            self._client.close()
 
     def map(self, *, model: str, system: str, items: list[tuple[str, str]], output_type: type[T],
             max_tokens: int = 4096, workers: int = 8) -> Results:

@@ -1,4 +1,4 @@
-# Pain Report — 2026-11-26 00:24 UTC
+# Pain Report — 2026-11-26 02:39 UTC
 
 > **DEMO** — built from synthetic fixture documents (tests/fixtures). Not research findings.
 
@@ -201,9 +201,9 @@ Every quote below was found verbatim in its source by code. Values marked *infer
 
 | Task | O*NET | Postings | Companies | Tools | Frequency | Posted pay |
 |---|---|---|---|---|---|---|
-| Reconcile vendor statements every month |  | 2 | 2 |  | every month, month-end | $48,000 - $55,000; [structured field] salaryRange: USD 45000-52000 per-year-salary |
-| Enter carrier invoices into the TMS daily |  | 1 | 1 |  | daily | [structured field] salaryRange: USD 45000-52000 per-year-salary |
-| Prepare weekly aging reports in Excel |  | 1 | 1 | Excel | weekly | [structured field] salaryRange: USD 45000-52000 per-year-salary |
+| Reconcile vendor statements every month |  | 2 | 2 |  | every month, month-end | $48,000 - $55,000; \[structured field\] salaryRange: USD 45000-52000 per-year-salary |
+| Enter carrier invoices into the TMS daily |  | 1 | 1 |  | daily | \[structured field\] salaryRange: USD 45000-52000 per-year-salary |
+| Prepare weekly aging reports in Excel |  | 1 | 1 | Excel | weekly | \[structured field\] salaryRange: USD 45000-52000 per-year-salary |
 | Enter vendor invoices from PDF and email into QuickBooks daily |  | 1 | 1 | QuickBooks | daily | $48,000 - $55,000 |
 | Match purchase orders to invoices and resolve discrepancies |  | 1 | 1 |  |  | $48,000 - $55,000 |
 | Answer vendor calls about payment status |  | 1 | 1 |  |  | $48,000 - $55,000 |
@@ -222,9 +222,9 @@ Posted pay is the role's pay, not the cost of the task: the share of the role sp
 | Source | Docs | Duplicates | Triaged | Pain | Signals | Dropped |
 |---|---|---|---|---|---|---|
 | demo-forum | 9 | 1 | 8 | 5 | 5 | 0 |
-| demo-pricing | 2 | 0 | 0 | 0 | 0 | 0 |
 | demo-jobs | 2 | 0 | 0 | 0 | 0 | 0 |
-| demo-search | 1 | 0 | 1 | 1 | 1 | 0 |
+| demo-pricing | 2 | 0 | 0 | 0 | 0 | 0 |
 | demo-issues | 1 | 0 | 1 | 1 | 1 | 0 |
+| demo-search | 1 | 0 | 1 | 1 | 1 | 0 |
 
 Signals dropped because the problem quote wasn't in the source: 0. Field downgrades: none.

@@ -14,7 +14,7 @@ import httpx
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 from . import mock
-from .cluster import apply_merges, build_clusters
+from .cluster import apply_merges, apply_overrides, build_clusters
 from .collectors import (BOARD_COLLECTORS, QUERY_COLLECTORS, CollectorUnavailable, PricingCollector, Query,
                          WaybackCollector)
 from .config import Settings
@@ -38,11 +38,17 @@ def render_doc(doc: Document, max_chars: int) -> str:
             f"TITLE: {doc.title}\n\n{doc.text[:max_chars]}\n</document>")
 
 
+def _open_store(settings: Settings):
+    """Postgres when DATABASE_URL is set, else the SQLite file at db_path."""
+    from .storage import open_store
+    return open_store(settings)
+
+
 class Pipeline:
     def __init__(self, settings: Settings, store: Store | None = None, transport: httpx.BaseTransport | None = None,
                  log: Callable[[str], None] = print, sleep: Callable[[float], None] = time.sleep):
         self.settings = settings
-        self.store = store or Store(settings.db_path)
+        self.store = store or _open_store(settings)
         self.registry = Registry.load(settings.config_dir)
         self.client = PoliteClient(settings, self.registry, transport=transport, sleep=sleep)
         self.llm = LLM(settings, log=log)
@@ -242,12 +248,32 @@ class Pipeline:
                 self.log(f"cluster: merge judge combined {before - len(clusters)} clusters")
             except Exception as exc:  # merging is an improvement, not a requirement
                 self.log(f"cluster: merge judge skipped ({exc})")
+        overrides = self.store.overrides()  # reviewer merges/splits from the UI, oldest first
+        if overrides:
+            before = len(clusters)
+            clusters = apply_overrides(clusters, overrides, pairs, weights, thresholds)
+            self.log(f"cluster: re-applied {len(overrides)} manual overrides ({before} -> {len(clusters)} clusters)")
         for c in clusters:  # keep write-ups for clusters whose membership didn't change
             if c.id in previous:
                 c.synthesis, c.skeptic = previous[c.id].synthesis, previous[c.id].skeptic
+        self._carry_labels(previous, clusters, cfg.get("trends", {}).get("match_jaccard", 0.5))
         self.store.replace_clusters(clusters)
         self.log(f"cluster: {len(clusters)} problems from {sum(c.n_signals for c in clusters)} signals")
         return len(clusters)
+
+    def _carry_labels(self, previous: dict, clusters: list, threshold: float) -> int:
+        """Review labels follow a cluster whose id changed because its membership changed (signal-set overlap)."""
+        labelled = self.store.labels("cluster")
+        if not any(cid in labelled for cid in previous):
+            return 0
+        from .trends import match_clusters
+        # match every old cluster (not only labelled ones) so each label goes to its cluster's true successor
+        matches = match_clusters(previous.values(), clusters, threshold)
+        moved = sum(self.store.move_label("cluster", old_id, new_id)
+                    for new_id, old_id in matches.items() if new_id != old_id and old_id in labelled)
+        if moved:
+            self.log(f"cluster: carried {moved} review labels to re-formed clusters")
+        return moved
 
     def synthesize(self, top: int = 20, batch: bool = False) -> int:
         n = run_synthesis(self.store, self.llm, self.settings, top=top, batch=batch)
@@ -277,6 +303,22 @@ class Pipeline:
         return self.report(top=top)
 
     # ------------------------------------------------------------ deep dive
+
+    def deepdive_agentic(self, top: int = 10, sources: tuple[str, ...] = ("hn", "github"),
+                         max_queries: int = 4, max_total: int = 30) -> dict:
+        """Tool-using Claude loop over registered collectors (mock planner offline), then re-analyse."""
+        from .agent.deepdive import run as run_agent, summarize
+        stats = run_agent(self, top=top, sources=sources, max_queries=max_queries, max_total=max_total)
+        self.log(f"deepdive (agentic): {summarize(stats)}")
+        for c in stats.get("per_cluster", []):
+            if c.get("notes"):
+                self.log(f"  [{c['cluster_id']}] {c['notes']}")
+        if stats.get("new_documents"):  # nothing new: skip a paid re-analysis
+            self.triage()
+            self.extract()
+            self.cluster()
+            self.synthesize(top=top)
+        return stats
 
     def deepdive(self, top: int = 10, sources: tuple[str, ...] = ("hn", "github"), limit: int = 30) -> None:
         """Search for corroborating (and contradicting) evidence for the top clusters, then re-run analysis."""

@@ -130,3 +130,83 @@ def apply_merges(clusters: list[Cluster], plan: MergePlan, pairs: list[Pair], we
     out = [c for c in clusters if c.id not in used] + merged
     out.sort(key=lambda c: c.score, reverse=True)
     return out
+
+
+# ------------------------------------------------------------------ human overrides (review UI)
+#
+# Cluster ids are hashes of their signal ids and every `paindisc cluster` run rebuilds clusters from scratch, so a
+# reviewer's merges and splits are stored as overrides (store.add_override) and re-applied, oldest first, after
+# automatic clustering and the LLM merge judge. Payloads:
+#   merge: {"signal_ids": [...]}  these signals belong together: the clusters holding them become one cluster
+#   split: {"signal_ids": [...]}  these signals form their own cluster, apart from the rest
+# Signal ids that no longer exist are ignored.
+
+
+def merge_clusters(clusters: list[Cluster], pairs: list[Pair], weights: dict | None = None,
+                   thresholds: dict | None = None) -> Cluster:
+    """One rescored cluster holding every (still existing) signal of `clusters`. No synthesis."""
+    by_signal = {s.id: (s, d) for s, d in pairs}
+    ids = list(dict.fromkeys(sid for c in clusters for sid in c.signal_ids if sid in by_signal))
+    if not ids:
+        raise ValueError("none of these clusters' signals exist any more")
+    return make_cluster([by_signal[sid] for sid in ids], weights, thresholds)
+
+
+def split_cluster(cluster: Cluster, signal_ids: list[str], pairs: list[Pair], weights: dict | None = None,
+                  thresholds: dict | None = None) -> tuple[Cluster, Cluster]:
+    """Split `signal_ids` off `cluster`. Returns (split-off cluster, remainder), both rescored, no synthesis."""
+    by_signal = {s.id: (s, d) for s, d in pairs}
+    members = [sid for sid in cluster.signal_ids if sid in by_signal]
+    moved = set(signal_ids)
+    unknown = moved - set(cluster.signal_ids)
+    if unknown:
+        raise ValueError(f"signals not in cluster {cluster.id}: {', '.join(sorted(unknown))}")
+    out = [sid for sid in members if sid in moved]
+    rest = [sid for sid in members if sid not in moved]
+    if not out:
+        raise ValueError("none of the signals to split off exist any more")
+    if not rest:
+        raise ValueError("a split must leave at least one signal in the original cluster")
+    return (make_cluster([by_signal[sid] for sid in out], weights, thresholds),
+            make_cluster([by_signal[sid] for sid in rest], weights, thresholds))
+
+
+def apply_overrides(clusters: list[Cluster], overrides: list[dict], pairs: list[Pair], weights: dict | None = None,
+                    thresholds: dict | None = None) -> list[Cluster]:
+    """Re-apply stored merge/split overrides, in order, to freshly built clusters.
+
+    Clusters whose membership ends up unchanged are returned as they came in; changed ones are rebuilt with
+    `make_cluster` (new id, rescored, no synthesis). The result is sorted by score, highest first.
+    """
+    by_signal = {s.id: (s, d) for s, d in pairs}
+    original = {frozenset(c.signal_ids): c for c in clusters}
+    groups: list[set[str]] = [set(c.signal_ids) for c in clusters]
+
+    for override in overrides:
+        payload = override.get("payload") or {}
+        wanted = {sid for sid in payload.get("signal_ids") or [] if sid in by_signal}
+        if not wanted:
+            continue
+        touched = [g for g in groups if g & wanted]
+        if override.get("kind") == "merge":
+            if len(touched) < 2:
+                continue  # already together (or no longer clustered)
+            groups = [g for g in groups if not g & wanted] + [set().union(*touched)]
+        elif override.get("kind") == "split":
+            moved = wanted & set().union(*touched) if touched else set()
+            if not moved:
+                continue
+            kept = [g - moved for g in touched]
+            groups = [g for g in groups if not g & wanted] + [g for g in kept if g] + [moved]
+
+    out: list[Cluster] = []
+    for group in groups:
+        same = original.get(frozenset(group))
+        if same is not None:
+            out.append(same)
+            continue
+        members = [by_signal[sid] for sid in sorted(group) if sid in by_signal]
+        if members:
+            out.append(make_cluster(members, weights, thresholds))
+    out.sort(key=lambda c: c.score, reverse=True)
+    return out

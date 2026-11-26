@@ -116,3 +116,15 @@ sources:
     route: manual
     allowed: false
     reason: No public reviews API found. Manual sampling only.
+
+  # ---------------------------------------------------------------------------
+  # Outbound delivery (not a data source). Uses the same registry gate so no code
+  # path reaches the network without an entry here.
+
+  slack:
+    domains: [hooks.slack.com]
+    route: official_api
+    allowed: false
+    reason: Outbound delivery of the weekly report and trend alerts via an incoming webhook. Set SLACK_WEBHOOK_URL, then flip `allowed` yourself.
+    terms_url: https://api.slack.com/messaging/webhooks
+    rate_limit_per_min: 1

@@ -19,3 +19,9 @@ confidence:
   high_source_types: 2
   high_max_age_days: 365
   medium_authors: 3
+
+trends:                    # weekly diff of cluster scores (SPEC backlog 8)
+  match_jaccard: 0.5       # a cluster continues an earlier one if their signal sets overlap at least this much
+  rising_delta: 0.05       # score increase that counts as rising
+  falling_delta: 0.05      # score decrease that counts as falling
+  compare_days: 7          # compare against the latest snapshot at least this old

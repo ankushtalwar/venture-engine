@@ -1,0 +1,19 @@
+{
+  "name": "paindisc-e2e",
+  "private": true,
+  "description": "Playwright end-to-end tests for the paindisc review UI and JSON API",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:sqlite": "playwright test --project=sqlite --project=sqlite-auth",
+    "test:docker": "E2E_DOCKER=1 playwright test --project=docker",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit",
+    "install-browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

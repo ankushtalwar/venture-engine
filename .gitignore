@@ -16,6 +16,9 @@ eggs/
 .eggs/
 lib/
 lib64/
+# ...but not the TypeScript source folders of the UI and the e2e suite
+!frontend/src/lib/
+!e2e/lib/
 parts/
 sdist/
 var/
@@ -225,3 +228,9 @@ __marimo__/
 # Venture Engine runtime output (local database, snapshots, generated reports)
 data/
 reports/
+
+# Postgres dumps (docs/deployment.md)
+backups/
+
+# macOS
+.DS_Store

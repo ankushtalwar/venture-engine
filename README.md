@@ -214,8 +214,8 @@ Respect applicable API rate limits, licensing restrictions and commercial-use re
 | Semantic search | pgvector |
 | Research integrations | Authorized APIs |
 | Backend API | FastAPI |
-| Dashboard | Streamlit |
-| Scheduling | Configurable scheduled workflows |
+| Dashboard | React + Vite + TypeScript (review UI) |
+| Scheduling | Docker Compose + supercronic (weekly run) |
 | Testing | Pytest |
 | Version control | Git / GitHub |
 
@@ -342,15 +342,21 @@ Raw third-party platform data is not intended to be sold or redistributed.
 - [x] Initial agentic architecture designed
 - [x] Commercial evaluation framework defined
 - [x] Proposed research scope established
-- [ ] Core research pipeline implemented
-- [ ] Database implementation
-- [ ] External data integrations
+- [x] Core research pipeline implemented (Pain Discovery Agent)
+- [x] Database implementation (SQLite offline, PostgreSQL + pgvector)
+- [x] External data integrations (registry-gated public APIs; see [SPEC.md](SPEC.md) section 4)
 - [ ] Reddit API and commercial-use approval
-- [ ] Agent evaluation framework
-- [ ] Research dashboard
-- [ ] End-to-end validation
+- [x] Agent evaluation framework (gold-set evaluation for triage and verification)
+- [x] Research dashboard (review UI)
+- [x] End-to-end validation (Playwright)
+- [ ] Remaining six agents (Opportunity Generation through Adversarial Evaluation)
 
-Implemented so far: the Pain Discovery Agent (`paindisc`). See [docs/pain-discovery.md](docs/pain-discovery.md) to run it and [SPEC.md](SPEC.md) for its contract.
+Implemented so far: the Pain Discovery Agent (`paindisc`) with its review UI, API, Postgres backend, agentic deep dive, trend alerts and Docker deployment.
+
+- Run it: [docs/pain-discovery.md](docs/pain-discovery.md)
+- Contract: [SPEC.md](SPEC.md)
+- API reference: [docs/api.md](docs/api.md)
+- Deployment (Docker, Postgres, scheduler, Slack, env vars): [docs/deployment.md](docs/deployment.md)
 
 ---
 
