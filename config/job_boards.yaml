@@ -1,0 +1,13 @@
+# Company job boards to pull. Greenhouse token = the path in boards.greenhouse.io/<token>;
+# Lever site = the path in jobs.lever.co/<site>.
+#
+# Find boards hiring a role:  uv run paindisc boards-discover "office manager"   (needs BRAVE_API_KEY)
+#
+# ATS boards skew toward tech and venture-backed companies. For small-business roles
+# (bookkeepers, dispatchers, office managers) plan on a licensed job-posting feed later.
+
+greenhouse: []
+lever: []
+
+# Only keep postings whose title matches (case-insensitive). Set to "" to keep everything.
+title_filter: "(?i)(operations|office manager|coordinator|specialist|bookkeep|accounts? (payable|receivable)|billing|dispatch|admin|assistant|clerk|analyst|onboarding|compliance)"

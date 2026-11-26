@@ -1,0 +1,8 @@
+{"url": "https://example.com/forum/a1", "is_pain": true}
+{"url": "https://example.com/issues/a2", "is_pain": true, "no_figures": true}
+{"url": "https://example.org/blog/a3", "is_pain": true, "no_figures": true}
+{"url": "https://example.com/forum/b2", "is_pain": true, "no_figures": true}
+{"url": "https://example.com/forum/c1", "is_pain": true, "no_figures": true}
+{"url": "https://example.com/forum/n1", "is_pain": false}
+{"url": "https://example.com/forum/n2", "is_pain": false}
+{"url": "https://example.com/forum/n3", "is_pain": false}

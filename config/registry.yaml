@@ -1,0 +1,118 @@
+# Source registry. Collectors may only call hosts listed under an allowed source;
+# every redirect hop is checked again. Nothing else in the code decides access.
+#
+# Entries were set up from each source's public docs on 2026-11-26. Read the terms
+# yourself, then change `reviewed_by` to your name. Re-check quarterly: terms change.
+
+sources:
+  hn:
+    domains: [hn.algolia.com]
+    route: public_api
+    allowed: true
+    terms_url: https://hn.algolia.com/api
+    reviewed: 2026-11-26
+    reviewed_by: claude (please confirm)
+    rate_limit_per_min: 60
+    attribution: Link each quote to its news.ycombinator.com item.
+
+  github:
+    domains: [api.github.com]
+    route: official_api
+    allowed: true
+    terms_url: https://docs.github.com/en/site-policy/github-terms/github-terms-of-service
+    reviewed: 2026-11-26
+    reviewed_by: claude (please confirm)
+    rate_limit_per_min: 20   # search API allows 30/min with a token, 10/min without
+    attribution: Link each quote to its issue.
+    notes: Research use of issue text only; never build profiles of users.
+
+  greenhouse:
+    domains: [boards-api.greenhouse.io]
+    route: public_api
+    allowed: true
+    terms_url: https://developers.greenhouse.io/job-board.html
+    reviewed: 2026-11-26
+    reviewed_by: claude (please confirm)
+    rate_limit_per_min: 30
+    notes: Public Job Board API; only application POSTs need auth. Poll on a schedule, not continuously.
+
+  lever:
+    domains: [api.lever.co]
+    route: public_api
+    allowed: true
+    terms_url: https://github.com/lever/postings-api
+    reviewed: 2026-11-26
+    reviewed_by: claude (please confirm)
+    rate_limit_per_min: 30
+
+  brave:
+    domains: [api.search.brave.com]
+    route: search_api
+    allowed: true
+    terms_url: https://brave.com/search/api/
+    reviewed: 2026-11-26
+    reviewed_by: claude (please confirm)
+    rate_limit_per_min: 50
+    notes: Discovery only. Snippets are Brave's data - check your plan's terms on storing results. Result pages are never fetched.
+
+  wayback:
+    domains: [web.archive.org]
+    route: public_api
+    allowed: true
+    terms_url: https://archive.org/about/terms.php
+    reviewed: 2026-11-26
+    reviewed_by: claude (please confirm)
+    rate_limit_per_min: 15
+
+  pricing_pages:
+    domains: []   # filled from config/pricing_targets.yaml, only for targets with terms_checked: true
+    route: polite_crawl
+    allowed: true
+    robots: true
+    rate_limit_per_min: 6
+
+  # ---------------------------------------------------------------------------
+  # Not permitted until you have approval or written permission. Flip `allowed`
+  # only after that, and add a collector.
+
+  reddit:
+    domains: [oauth.reddit.com, reddit.com]
+    route: official_api
+    allowed: false
+    reason: Data API needs approval under the Responsible Builder Policy (self-service closed Nov 2025); the developer track covers non-commercial apps.
+
+  upwork:
+    domains: [api.upwork.com, upwork.com]
+    route: official_api
+    allowed: false
+    reason: API key needs approval; Upwork limits API use to personal and internal use.
+
+  producthunt:
+    domains: [api.producthunt.com, producthunt.com]
+    route: official_api
+    allowed: false
+    reason: API is non-commercial by default; email hello@producthunt.com for business use.
+
+  g2:
+    domains: [data.g2.com, g2.com]
+    route: official_api
+    allowed: false
+    reason: Review data via G2's API / syndication key from a G2 rep; ask for research access.
+
+  capterra:
+    domains: [capterra.com]
+    route: manual
+    allowed: false
+    reason: Terms bar automated extraction without written consent. Manual sampling only.
+
+  shopify_app_store:
+    domains: [apps.shopify.com]
+    route: manual
+    allowed: false
+    reason: No API for App Store reviews. Manual sampling only.
+
+  appexchange:
+    domains: [appexchange.salesforce.com]
+    route: manual
+    allowed: false
+    reason: No public reviews API found. Manual sampling only.

@@ -1,0 +1,11 @@
+# Vendor pricing pages to snapshot monthly (and back-fill from the Wayback Machine).
+# A target is only fetched when terms_checked is true: read the site's terms first.
+# robots.txt is enforced on every fetch.
+#
+# targets:
+#   - vendor: ExampleVendor
+#     category: practice management
+#     url: https://www.example.com/pricing
+#     terms_checked: false
+
+targets: []

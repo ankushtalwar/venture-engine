@@ -1,0 +1,21 @@
+# Cluster scoring. Start here, then tune against your accept/reject labels.
+
+embedding: tfidf           # tfidf (default) or sbert (uv sync --extra embeddings)
+distance_threshold: 0.7    # cosine distance for grouping signals (lower = stricter). Try ~0.35 with sbert.
+llm_merge: true            # after clustering, ask Claude to merge statements of the same job (real runs only)
+llm_merge_top: 300         # how many top clusters the merge judge looks at
+
+weights:
+  breadth: 0.30        # distinct authors x source types
+  spend: 0.20          # signals with observed spend or financial impact
+  frequency: 0.15      # how often the pain hits one business
+  underserved: 0.15    # complaints about existing tools
+  intensity: 0.10      # inferred severity
+  recency: 0.10        # share of evidence from the last 12 months
+  automatability: 0.0  # always inferred: shown on cards, not scored
+
+confidence:
+  high_authors: 5
+  high_source_types: 2
+  high_max_age_days: 365
+  medium_authors: 3
