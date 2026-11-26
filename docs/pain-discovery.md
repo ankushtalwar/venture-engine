@@ -32,7 +32,7 @@ Accept or reject pain cards, label signals valid / invalid / duplicate, merge or
 ## Real runs
 
 ```bash
-cp .env.example .env          # set ANTHROPIC_API_KEY; GITHUB_TOKEN and BRAVE_API_KEY are optional
+echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env   # GITHUB_TOKEN and BRAVE_API_KEY are optional; all variables are in deployment.md
 ```
 
 1. **Pick 3 pilot verticals** in `config/segments.yaml` (the shipped three are examples) and write their vocabulary the way operators talk. Optionally scope GitHub to repos of business tools with `github_scope`.
